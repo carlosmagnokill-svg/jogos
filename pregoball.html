@@ -166,6 +166,53 @@
     grid-template-columns:1fr 1fr;
     gap:10px;
   }
+  .match-options{
+    margin:4px 0 14px;
+    padding:12px;
+    border-radius:12px;
+    background:rgba(255,255,255,.045);
+    border:1px solid rgba(255,255,255,.07);
+  }
+  .match-options-title{
+    font-size:12px;
+    color:var(--muted);
+    font-weight:700;
+    margin-bottom:9px;
+  }
+  .check-row{
+    display:flex;
+    gap:9px;
+    align-items:flex-start;
+    cursor:pointer;
+    padding:6px 0;
+    font-size:13px;
+    line-height:1.35;
+  }
+  .check-row input[type="checkbox"]{
+    width:16px;
+    height:16px;
+    margin:1px 0 0;
+    accent-color:var(--accent);
+    flex:0 0 auto;
+  }
+  .check-row span{
+    flex:1;
+  }
+  .sub-option{
+    margin:3px 0 7px 25px;
+  }
+  .sub-option label{
+    display:block;
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:5px;
+  }
+  .option-note{
+    display:block;
+    color:#a99685;
+    font-size:11px;
+    margin-top:2px;
+  }
   .team em{
     display:block;
     margin-top:4px;
@@ -194,7 +241,7 @@
     <div id="overlay" class="overlay">
       <div class="setup">
         <h2>Futebol de Prego</h2>
-        <p>Versão 0.9 — computador com memória de jogada e correção automática de ângulo.</p>
+        <p>Versão 1.2 — todas as velocidades dos goleiros aumentadas em 35%.</p>
 
         <div class="field">
           <label for="players">Modo</label>
@@ -243,6 +290,35 @@
             <option value="normal" selected>Normal</option>
             <option value="hard">Difícil</option>
           </select>
+        </div>
+
+        <div class="match-options">
+          <div class="match-options-title">Opções da partida</div>
+
+          <label class="check-row">
+            <input type="checkbox" id="goalkeeperMovement">
+            <span>
+              <strong>Movimentação do goleiro</strong>
+              <span class="option-note">Os goleiros dos dois times se movimentam para esquerda e direita.</span>
+            </span>
+          </label>
+
+          <div id="goalkeeperSpeedField" class="sub-option hide">
+            <label for="goalkeeperSpeed">Velocidade do goleiro</label>
+            <select id="goalkeeperSpeed">
+              <option value="slow">Lenta</option>
+              <option value="medium" selected>Média</option>
+              <option value="fast">Rápida</option>
+            </select>
+          </div>
+
+          <label class="check-row">
+            <input type="checkbox" id="intermittentPlayers">
+            <span>
+              <strong>Jogadores intermitentes</strong>
+              <span class="option-note">Todos os jogadores, exceto os goleiros, abaixam e levantam aleatoriamente, nunca todos juntos. Quando estão totalmente abaixados, a moeda passa por cima.</span>
+            </span>
+          </label>
         </div>
 
         <button id="startBtn">COMEÇAR PARTIDA</button>
@@ -303,6 +379,10 @@
     formationTopNote: document.getElementById('formationTopNote'),
     difficulty: document.getElementById('difficulty'),
     difficultyField: document.getElementById('difficultyField'),
+    goalkeeperMovement: document.getElementById('goalkeeperMovement'),
+    goalkeeperSpeed: document.getElementById('goalkeeperSpeed'),
+    goalkeeperSpeedField: document.getElementById('goalkeeperSpeedField'),
+    intermittentPlayers: document.getElementById('intermittentPlayers'),
     start: document.getElementById('startBtn'),
     reset: document.getElementById('resetBtn'),
     newGame: document.getElementById('newBtn'),
@@ -349,6 +429,18 @@
   let difficulty = 'normal';
   let formationBottom = 1;
   let formationTop = 1;
+
+  // Opções especiais da partida
+  let goalkeeperMovementEnabled = false;
+  let goalkeeperSpeed = 'medium';
+  let intermittentPlayersEnabled = false;
+
+  const goalkeeperAngularSpeed = {
+    slow: 1.1664,   // +35% sobre a velocidade anterior
+    medium: 2.0709, // +35% sobre a velocidade anterior
+    fast: 3.19599   // +35% sobre a velocidade anterior
+  };
+
   let score = { bottom:0, top:0 };
   let pointer = { x:0, y:0, active:false };
   let hoveredSector = -1;
@@ -434,22 +526,37 @@
     // O time de cima usa a formação espelhada verticalmente.
     const chosenTop = chosenTopBase.map(([x,y]) => [x,1-y]);
 
+    function createNail(rx, ry, team, i){
+      const x = field.x + rx*field.w;
+      const y = field.y + ry*field.h;
+
+      return {
+        x,
+        y,
+        baseX:x,
+        baseY:y,
+        team,
+        id:(team === 'top' ? 'T' : 'B') + i,
+        isGoalkeeper:i === 0,
+
+        // Movimento horizontal do goleiro.
+        goaliePhase: team === 'top' ? 0 : Math.PI,
+
+        // Movimento vertical intermitente.
+        height:1,
+        intermittentState:'up',
+        intermittentElapsed:0,
+        intermittentDownUntil:0,
+        nextIntermittentAt:performance.now() + 700 + Math.random()*3900
+      };
+    }
+
     chosenTop.forEach(([rx,ry], i) => {
-      nails.push({
-        x:field.x + rx*field.w,
-        y:field.y + ry*field.h,
-        team:'top',
-        id:'T'+i
-      });
+      nails.push(createNail(rx,ry,'top',i));
     });
 
     chosenBottom.forEach(([rx,ry], i) => {
-      nails.push({
-        x:field.x + rx*field.w,
-        y:field.y + ry*field.h,
-        team:'bottom',
-        id:'B'+i
-      });
+      nails.push(createNail(rx,ry,'bottom',i));
     });
   }
 
@@ -475,6 +582,10 @@
     flicksPerTurn = Number(UI.flicks.value);
     flicksLeft = flicksPerTurn;
     difficulty = UI.difficulty.value;
+
+    goalkeeperMovementEnabled = UI.goalkeeperMovement.checked;
+    goalkeeperSpeed = UI.goalkeeperSpeed.value;
+    intermittentPlayersEnabled = UI.intermittentPlayers.checked;
 
     formationBottom = Number(UI.formationBottom.value);
 
@@ -627,6 +738,8 @@
     let nearestClearance = Infinity;
     const lookAhead = 285;
     for (const n of nails){
+      if (!nailBlocksCoin(n)) continue;
+
       const rx = n.x - coin.x;
       const ry = n.y - coin.y;
       const projection = rx*dirX + ry*dirY;
@@ -884,8 +997,113 @@
     }
   });
 
+  function updateDynamicNails(dt){
+    const now = performance.now();
+    updateGoalkeepers(dt);
+    updateIntermittentPlayers(dt, now);
+  }
+
+  function updateGoalkeepers(dt){
+    for (const n of nails){
+      if (!n.isGoalkeeper) continue;
+
+      if (!goalkeeperMovementEnabled){
+        n.x = n.baseX;
+        continue;
+      }
+
+      // O goleiro percorre horizontalmente a região diante do próprio gol.
+      // O movimento senoidal evita uma mudança de direção brusca nas extremidades.
+      const angular = goalkeeperAngularSpeed[goalkeeperSpeed] || goalkeeperAngularSpeed.medium;
+      n.goaliePhase += angular * (dt/1000);
+
+      const maxTravel = field.goalW * 0.34;
+      n.x = n.baseX + Math.sin(n.goaliePhase) * maxTravel;
+    }
+  }
+
+  function updateIntermittentPlayers(dt, now){
+    for (const n of nails){
+      // Os goleiros NÃO participam do modo intermitente.
+      // Mesmo quando a opção está habilitada, permanecem sempre levantados.
+      if (n.isGoalkeeper){
+        n.height = 1;
+        n.intermittentState = 'up';
+        continue;
+      }
+
+      if (!intermittentPlayersEnabled){
+        n.height = 1;
+        n.intermittentState = 'up';
+        continue;
+      }
+
+      if (n.intermittentState === 'up'){
+        n.height = 1;
+
+        if (now >= n.nextIntermittentAt){
+          n.intermittentState = 'lowering';
+          n.intermittentElapsed = 0;
+        }
+        continue;
+      }
+
+      if (n.intermittentState === 'lowering'){
+        n.intermittentElapsed += dt;
+        const t = Math.min(1, n.intermittentElapsed / 260);
+        n.height = 1 - t;
+
+        if (t >= 1){
+          n.height = 0;
+          n.intermittentState = 'down';
+          n.intermittentDownUntil = now + 500 + Math.random()*600;
+        }
+        continue;
+      }
+
+      if (n.intermittentState === 'down'){
+        n.height = 0;
+
+        if (now >= n.intermittentDownUntil){
+          // Se a moeda estiver exatamente por cima do prego abaixado,
+          // ele espera a moeda sair antes de levantar.
+          const d = Math.hypot(coin.x-n.x, coin.y-n.y);
+          if (d < coin.r+nailR+5){
+            n.intermittentDownUntil = now + 140;
+          } else {
+            n.intermittentState = 'rising';
+            n.intermittentElapsed = 0;
+          }
+        }
+        continue;
+      }
+
+      if (n.intermittentState === 'rising'){
+        n.intermittentElapsed += dt;
+        const t = Math.min(1, n.intermittentElapsed / 310);
+        n.height = t;
+
+        if (t >= 1){
+          n.height = 1;
+          n.intermittentState = 'up';
+
+          // Cada jogador recebe um tempo próprio. Isso impede o efeito
+          // de todos abaixarem e levantarem juntos.
+          n.nextIntermittentAt = now + 850 + Math.random()*4300;
+        }
+      }
+    }
+  }
+
+  function nailBlocksCoin(n){
+    // Abaixo de aproximadamente 20% da altura o prego está rente ao campo
+    // e a moeda pode passar por cima dele.
+    return !intermittentPlayersEnabled || n.height > 0.20;
+  }
+
   function update(dt){
     updateCelebration(dt);
+    updateDynamicNails(dt);
 
     if (goalPause){
       updateUI();
@@ -1015,6 +1233,8 @@
 
   function collideNails(){
     for (const n of nails){
+      if (!nailBlocksCoin(n)) continue;
+
       const dx = coin.x - n.x;
       const dy = coin.y - n.y;
       const minDist = coin.r + nailR;
@@ -1486,28 +1706,66 @@
 
   function drawNails(){
     for (const n of nails){
-      // sombra inclinada para dar sensação de profundidade
+      const h = typeof n.height === 'number' ? n.height : 1;
+
       ctx.save();
-      ctx.fillStyle='rgba(0,0,0,.25)';
+
+      // Conforme o prego abaixa, a sombra encurta até praticamente desaparecer.
+      const shadowAlpha = 0.04 + 0.22*h;
+      const shadowOffset = 2 + 7*h;
+      ctx.fillStyle=`rgba(0,0,0,${shadowAlpha})`;
       ctx.beginPath();
-      ctx.ellipse(n.x+5,n.y+9,nailR*.78,nailR*1.25,-.3,0,Math.PI*2);
+      ctx.ellipse(
+        n.x + 2 + 3*h,
+        n.y + shadowOffset,
+        nailR*(0.64 + 0.14*h),
+        nailR*(0.58 + 0.62*h),
+        -.3,0,Math.PI*2
+      );
       ctx.fill();
 
-      const g=ctx.createRadialGradient(n.x-3,n.y-4,1,n.x,n.y,nailR+3);
-      g.addColorStop(0,'#ffffff');
-      g.addColorStop(.25,'#cfd3d5');
-      g.addColorStop(.65,'#7e858a');
-      g.addColorStop(1,'#3d4144');
+      // A cabeça continua visível mesmo rente ao campo, mas fica menor
+      // e mais escura para deixar claro que a moeda pode passar por cima.
+      const visibleR = nailR * (0.70 + 0.30*h);
+      const g=ctx.createRadialGradient(
+        n.x-3*h,n.y-4*h,1,
+        n.x,n.y,visibleR+3
+      );
+
+      if (h <= .20){
+        g.addColorStop(0,'#8f9698');
+        g.addColorStop(.55,'#5d6467');
+        g.addColorStop(1,'#353a3c');
+      } else {
+        g.addColorStop(0,'#ffffff');
+        g.addColorStop(.25,'#cfd3d5');
+        g.addColorStop(.65,'#7e858a');
+        g.addColorStop(1,'#3d4144');
+      }
+
       ctx.fillStyle=g;
       ctx.beginPath();
-      ctx.arc(n.x,n.y,nailR,0,Math.PI*2);
+      ctx.arc(n.x,n.y,visibleR,0,Math.PI*2);
       ctx.fill();
 
+      // Anel rente ao campo quando está totalmente abaixado.
+      if (h <= .20){
+        ctx.strokeStyle='rgba(255,255,255,.18)';
+        ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.arc(n.x,n.y,visibleR+2,0,Math.PI*2);
+        ctx.stroke();
+      }
+
       // marca discreta de time
-      ctx.fillStyle = n.team==='bottom' ? 'rgba(70,139,219,.8)' : 'rgba(216,82,82,.8)';
+      ctx.globalAlpha = 0.48 + 0.52*h;
+      ctx.fillStyle = n.team==='bottom'
+        ? 'rgba(70,139,219,.9)'
+        : 'rgba(216,82,82,.9)';
       ctx.beginPath();
-      ctx.arc(n.x,n.y,3.1,0,Math.PI*2);
+      ctx.arc(n.x,n.y,Math.max(2.2,3.1*(0.70+0.30*h)),0,Math.PI*2);
       ctx.fill();
+
       ctx.restore();
     }
   }
@@ -1694,6 +1952,15 @@
 
   UI.players.addEventListener('change', updateSetupMode);
 
+  function updateGoalkeeperOption(){
+    UI.goalkeeperSpeedField.classList.toggle(
+      'hide',
+      !UI.goalkeeperMovement.checked
+    );
+  }
+
+  UI.goalkeeperMovement.addEventListener('change', updateGoalkeeperOption);
+
   UI.start.addEventListener('click',startGame);
   UI.reset.addEventListener('click',()=>{
     if(!started) return;
@@ -1704,6 +1971,7 @@
   UI.newGame.addEventListener('click',newGame);
 
   updateSetupMode();
+  updateGoalkeeperOption();
   buildNails();
   resetCoin();
   requestAnimationFrame(loop);
