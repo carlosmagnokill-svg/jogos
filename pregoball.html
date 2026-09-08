@@ -194,7 +194,7 @@
     <div id="overlay" class="overlay">
       <div class="setup">
         <h2>Futebol de Prego</h2>
-        <p>Versão 0.8 — três formações reais, incluindo a Defensiva inspirada no tabuleiro de referência.</p>
+        <p>Versão 0.9 — computador com memória de jogada e correção automática de ângulo.</p>
 
         <div class="field">
           <label for="players">Modo</label>
@@ -361,6 +361,14 @@
   let aiAiming = false;
   let aiAimSector = -1;
   let aiAimPower = 0;
+
+  // "5 gramas de inteligência" do computador:
+  // guarda o que aconteceu em cada peteleco da rodada para não repetir
+  // uma trajetória que acabou de falhar.
+  let aiTurnHistory = [];
+  let aiCurrentShot = null;
+  let aiCorrectionActive = false;
+
   let goalPause = false;
   let audioCtx = null;
   let lastMetalSound = 0;
@@ -480,6 +488,9 @@
 
     buildNails();
     current = 'bottom';
+    aiTurnHistory = [];
+    aiCurrentShot = null;
+    aiCorrectionActive = false;
     score.bottom = 0;
     score.top = 0;
     UI.nameBottom.textContent = 'JOGADOR 1';
@@ -496,6 +507,9 @@
     clearTimeout(aiShotTimer);
     started = false;
     goalPause = false;
+    aiTurnHistory = [];
+    aiCurrentShot = null;
+    aiCorrectionActive = false;
     resetCoin();
     UI.overlay.classList.remove('hide');
     UI.turnText.textContent = 'Aguardando início';
@@ -544,6 +558,15 @@
   function switchTurn(){
     current = current === 'bottom' ? 'top' : 'bottom';
     flicksLeft = flicksPerTurn;
+
+    // Nova rodada do computador = nova memória de sequência.
+    // Dentro da mesma rodada, os petelecos anteriores continuam registrados.
+    if (current === 'top' && playerCount === 1){
+      aiTurnHistory = [];
+      aiCurrentShot = null;
+      aiCorrectionActive = false;
+    }
+
     updateUI();
 
     if (!isHumanTurn()){
@@ -568,6 +591,145 @@
     }
   }
 
+  function normalizeSector(s){
+    return ((s % 32) + 32) % 32;
+  }
+
+  function sectorDistance(a,b){
+    const d = Math.abs(normalizeSector(a) - normalizeSector(b));
+    return Math.min(d, 32-d);
+  }
+
+  function angleDifference(a,b){
+    let d = (a-b) % (Math.PI*2);
+    if (d > Math.PI) d -= Math.PI*2;
+    if (d < -Math.PI) d += Math.PI*2;
+    return d;
+  }
+
+  function aiGoalPoint(){
+    return {
+      x: W/2,
+      y: field.y + field.h + field.goalDepth*0.55
+    };
+  }
+
+  function evaluateAICandidate(sector, directTravelAngle, lastBadShot){
+    const travel = normalizeSector(sector) * (Math.PI/16) + Math.PI;
+    const dirX = Math.cos(travel);
+    const dirY = Math.sin(travel);
+
+    // Quanto a trajetória aponta para o gol.
+    const alignment = Math.cos(angleDifference(travel, directTravelAngle));
+    let score = alignment * 115;
+
+    // Leitura simples do corredor inicial: evita um prego logo na frente.
+    let nearestClearance = Infinity;
+    const lookAhead = 285;
+    for (const n of nails){
+      const rx = n.x - coin.x;
+      const ry = n.y - coin.y;
+      const projection = rx*dirX + ry*dirY;
+
+      if (projection > 0 && projection < lookAhead){
+        const perpendicular = Math.abs(rx*dirY - ry*dirX);
+        nearestClearance = Math.min(nearestClearance, perpendicular);
+
+        const collisionBand = coin.r + nailR + 7;
+        if (perpendicular < collisionBand){
+          const severity = 1 - perpendicular/collisionBand;
+          score -= 105 * severity;
+          if (projection < 95) score -= 55 * severity;
+        }
+      }
+    }
+
+    if (nearestClearance > coin.r+nailR+18) score += 10;
+
+    // Se a última tentativa falhou, não repete o mesmo ângulo.
+    if (lastBadShot){
+      const dist = sectorDistance(sector, lastBadShot.sector);
+      if (dist <= 1) score -= 1000;
+      else if (dist === 2) score -= 300;
+      else if (dist === 3) score -= 70;
+    }
+
+    // Na mesma rodada evita insistir exatamente no mesmo setor.
+    for (const shot of aiTurnHistory){
+      if (sectorDistance(sector, shot.sector) === 0) score -= 70;
+    }
+
+    score += (Math.random()-.5) * 7;
+    return score;
+  }
+
+  function chooseAISector(directTravelAngle){
+    let directHitAngle = directTravelAngle + Math.PI;
+    directHitAngle = (directHitAngle % (Math.PI*2) + Math.PI*2) % (Math.PI*2);
+    const directSector = Math.round(directHitAngle / (Math.PI/16)) % 32;
+
+    const last = aiTurnHistory.length
+      ? aiTurnHistory[aiTurnHistory.length-1]
+      : null;
+
+    const lastBadShot = last && last.bad ? last : null;
+    aiCorrectionActive = !!lastBadShot;
+
+    // Depois de uma jogada ruim, abre deliberadamente o leque de ângulos.
+    const offsets = lastBadShot
+      ? [0,-3,3,-4,4,-5,5,-6,6,-8,8,-10,10]
+      : [0,-1,1,-2,2,-3,3,-4,4,-5,5,-6,6];
+
+    let bestSector = directSector;
+    let bestScore = -Infinity;
+
+    for (const off of offsets){
+      const candidate = normalizeSector(directSector + off);
+      const score = evaluateAICandidate(candidate, directTravelAngle, lastBadShot);
+      if (score > bestScore){
+        bestScore = score;
+        bestSector = candidate;
+      }
+    }
+
+    // Segurança extra: após falha, muda pelo menos 3 das 32 posições.
+    if (lastBadShot && sectorDistance(bestSector, lastBadShot.sector) < 3){
+      const side = Math.random() < .5 ? -1 : 1;
+      bestSector = normalizeSector(lastBadShot.sector + side*(3 + Math.floor(Math.random()*4)));
+    }
+
+    return bestSector;
+  }
+
+  function finalizeAIShot(){
+    if (!aiCurrentShot) return;
+
+    const goal = aiGoalPoint();
+    const endGoalDist = Math.hypot(goal.x-coin.x, goal.y-coin.y);
+    const displacement = Math.hypot(
+      coin.x-aiCurrentShot.startX,
+      coin.y-aiCurrentShot.startY
+    );
+    const progress = aiCurrentShot.startGoalDist - endGoalDist;
+
+    // Detecta exatamente o caso: vai, rebate e volta quase ao mesmo ponto.
+    const returnedToStart = displacement < 52;
+    const almostNoUsefulChange = displacement < 88 && progress < 14;
+
+    const result = {
+      ...aiCurrentShot,
+      endX: coin.x,
+      endY: coin.y,
+      displacement,
+      progress,
+      bad: returnedToStart || almostNoUsefulChange
+    };
+
+    aiTurnHistory.push(result);
+    if (aiTurnHistory.length > 6) aiTurnHistory.shift();
+    aiCurrentShot = null;
+  }
+
   function scheduleAI(){
     clearTimeout(aiTimer);
     clearTimeout(aiShotTimer);
@@ -581,34 +743,36 @@
   }
 
   function prepareAIAim(){
-    // PC ataca o gol de baixo.
-    const goalX = W/2;
-    const goalY = field.y + field.h + field.goalDepth*0.55;
+    const goal = aiGoalPoint();
 
-    let dx = goalX - coin.x;
-    let dy = goalY - coin.y;
-    let travelAngle = Math.atan2(dy, dx);
+    const dx = goal.x - coin.x;
+    const dy = goal.y - coin.y;
+    let directTravelAngle = Math.atan2(dy, dx);
 
-    const noise = difficulty === 'easy' ? 0.34 : difficulty === 'hard' ? 0.075 : 0.17;
-    travelAngle += (Math.random()*2-1) * noise;
+    const noise = difficulty === 'easy' ? 0.30 : difficulty === 'hard' ? 0.055 : 0.13;
+    directTravelAngle += (Math.random()*2-1) * noise;
+
+    aiAimSector = chooseAISector(directTravelAngle);
 
     let p;
     if (difficulty === 'easy') p = 45 + Math.random()*42;
     else if (difficulty === 'hard') p = 67 + Math.random()*25;
     else p = 55 + Math.random()*38;
 
-    // A seta representa o lado em que o peteleco atinge a moeda,
-    // portanto é o lado oposto ao sentido em que ela vai viajar.
-    let hitAngle = travelAngle + Math.PI;
-    hitAngle = (hitAngle % (Math.PI*2) + Math.PI*2) % (Math.PI*2);
+    const last = aiTurnHistory.length
+      ? aiTurnHistory[aiTurnHistory.length-1]
+      : null;
 
-    aiAimSector = Math.round(hitAngle / (Math.PI/16)) % 32;
-    aiAimPower = p;
+    // Se ficou preso, altera também a força para não reproduzir o mesmo estado físico.
+    if (last && last.bad && Math.abs(p-last.power) < 9){
+      p += p < 72 ? 12 : -12;
+    }
+
+    aiAimPower = Math.max(28, Math.min(100, p));
     aiAiming = true;
-    power = p;
+    power = aiAimPower;
     updateUI();
 
-    // O computador "mira" por um instante antes de dar o peteleco.
     aiShotTimer = setTimeout(() => {
       if (!started || goalPause || current !== 'top' || playerCount !== 1 || coinSpeed() >= stopSpeed) {
         aiAiming = false;
@@ -620,11 +784,19 @@
       const travel = hit + Math.PI;
       const speed = maxShotSpeed * (0.22 + 0.78*(aiAimPower/100));
 
+      const goalNow = aiGoalPoint();
+      aiCurrentShot = {
+        startX: coin.x,
+        startY: coin.y,
+        sector: aiAimSector,
+        power: aiAimPower,
+        startGoalDist: Math.hypot(goalNow.x-coin.x, goalNow.y-coin.y)
+      };
+
       coin.vx = Math.cos(travel)*speed;
       coin.vy = Math.sin(travel)*speed;
 
       aiAiming = false;
-      aiAimSector = -1;
       shotInProgress = true;
       movingPreviously = true;
       updateUI();
@@ -767,6 +939,11 @@
     if (movingPreviously && !nowMoving && shotInProgress && !goalPause){
       movingPreviously = false;
       shotInProgress = false;
+
+      if (current === 'top' && playerCount === 1){
+        finalizeAIShot();
+      }
+
       consumeFlick();
     } else if (nowMoving){
       movingPreviously = true;
@@ -882,6 +1059,9 @@
       resetCoin();
       current = team === 'bottom' ? 'top' : 'bottom';
       flicksLeft = flicksPerTurn;
+      aiTurnHistory = [];
+      aiCurrentShot = null;
+      aiCorrectionActive = false;
       goalPause = false;
       updateUI();
       if (!isHumanTurn()) scheduleAI();
@@ -1461,8 +1641,9 @@
       ctx.fillStyle='#ff6a64';
       ctx.strokeStyle='rgba(0,0,0,.55)';
       ctx.lineWidth=5;
-      ctx.strokeText('PC MIRANDO...',coin.x,coin.y-62);
-      ctx.fillText('PC MIRANDO...',coin.x,coin.y-62);
+      const aiLabel = aiCorrectionActive ? 'PC CORRIGINDO ÂNGULO...' : 'PC MIRANDO...';
+      ctx.strokeText(aiLabel,coin.x,coin.y-62);
+      ctx.fillText(aiLabel,coin.x,coin.y-62);
     }
 
     ctx.restore();
