@@ -241,7 +241,7 @@
     <div id="overlay" class="overlay">
       <div class="setup">
         <h2>Futebol de Prego</h2>
-        <p>Versão 1.2 — todas as velocidades dos goleiros aumentadas em 35%.</p>
+        <p>Versão 1.3 — PC com simulação de chute ao gol e goleiros mais rápidos.</p>
 
         <div class="field">
           <label for="players">Modo</label>
@@ -436,9 +436,9 @@
   let intermittentPlayersEnabled = false;
 
   const goalkeeperAngularSpeed = {
-    slow: 1.1664,   // +35% sobre a velocidade anterior
-    medium: 2.0709, // +35% sobre a velocidade anterior
-    fast: 3.19599   // +35% sobre a velocidade anterior
+    slow: 1.1664,
+    medium: 2.48508,  // +20% sobre a velocidade anterior
+    fast: 4.793985    // +50% sobre a velocidade anterior
   };
 
   let score = { bottom:0, top:0 };
@@ -725,93 +725,359 @@
     };
   }
 
-  function evaluateAICandidate(sector, directTravelAngle, lastBadShot){
-    const travel = normalizeSector(sector) * (Math.PI/16) + Math.PI;
-    const dirX = Math.cos(travel);
-    const dirY = Math.sin(travel);
+  function snapshotAIBlockers(){
+    // Fotografia instantânea do campo.
+    // IMPORTANTE: o PC NÃO prevê onde o goleiro estará depois,
+    // nem quando os jogadores intermitentes irão subir ou descer.
+    // Ele só conhece o estado visível neste exato momento.
+    return nails
+      .filter(n => nailBlocksCoin(n))
+      .map(n => ({
+        x:n.x,
+        y:n.y,
+        isGoalkeeper:n.isGoalkeeper
+      }));
+  }
 
-    // Quanto a trajetória aponta para o gol.
-    const alignment = Math.cos(angleDifference(travel, directTravelAngle));
-    let score = alignment * 115;
+  function simulateAICandidate(sector, shotPower, blockers){
+    let x = coin.x;
+    let y = coin.y;
 
-    // Leitura simples do corredor inicial: evita um prego logo na frente.
-    let nearestClearance = Infinity;
-    const lookAhead = 285;
-    for (const n of nails){
-      if (!nailBlocksCoin(n)) continue;
+    const startX = x;
+    const startY = y;
+    const goal = aiGoalPoint();
+    const startGoalDist = Math.hypot(goal.x-x, goal.y-y);
 
-      const rx = n.x - coin.x;
-      const ry = n.y - coin.y;
-      const projection = rx*dirX + ry*dirY;
+    const hit = normalizeSector(sector) * (Math.PI/16);
+    const travel = hit + Math.PI;
+    const speed = maxShotSpeed * (0.22 + 0.78*(shotPower/100));
 
-      if (projection > 0 && projection < lookAhead){
-        const perpendicular = Math.abs(rx*dirY - ry*dirX);
-        nearestClearance = Math.min(nearestClearance, perpendicular);
+    let vx = Math.cos(travel) * speed;
+    let vy = Math.sin(travel) * speed;
 
-        const collisionBand = coin.r + nailR + 7;
-        if (perpendicular < collisionBand){
-          const severity = 1 - perpendicular/collisionBand;
-          score -= 105 * severity;
-          if (projection < 95) score -= 55 * severity;
+    const left = field.x + coin.r;
+    const right = field.x + field.w - coin.r;
+    const topLine = field.y;
+    const bottomLine = field.y + field.h;
+    const goalL = W/2 - field.goalW/2;
+    const goalR = W/2 + field.goalW/2;
+    const goalInnerL = goalL + coin.r;
+    const goalInnerR = goalR - coin.r;
+
+    let collisions = 0;
+    let wallBounces = 0;
+    let minGoalDist = startGoalDist;
+    let goalEntryX = null;
+    let frames = 0;
+
+    // Aproximadamente 6 segundos de trajetória simulada.
+    for (frames=0; frames<360; frames++){
+      const currentSpeed = Math.hypot(vx,vy);
+      if (currentSpeed < stopSpeed) break;
+
+      const step = Math.min(2.2, Math.max(1, currentSpeed/5));
+      const substeps = Math.ceil(step);
+
+      for (let s=0; s<substeps; s++){
+        const f = 1/substeps;
+        x += vx*f;
+        y += vy*f;
+
+        // Laterais
+        if (x < left){
+          x = left;
+          if (vx < 0) vx = -vx * 0.92;
+          wallBounces++;
+        } else if (x > right){
+          x = right;
+          if (vx > 0) vx = -vx * 0.92;
+          wallBounces++;
+        }
+
+        let insideGoalMouth =
+          x - coin.r > goalL &&
+          x + coin.r < goalR;
+
+        // Linhas de fundo, exceto na boca do gol.
+        if (y - coin.r < topLine && !insideGoalMouth){
+          y = topLine + coin.r;
+          if (vy < 0) vy = -vy * 0.92;
+          wallBounces++;
+        }
+
+        if (y + coin.r > bottomLine && !insideGoalMouth){
+          y = bottomLine - coin.r;
+          if (vy > 0) vy = -vy * 0.92;
+          wallBounces++;
+        }
+
+        // Corredor interno do gol.
+        if (y < topLine || y > bottomLine){
+          if (x < goalInnerL){
+            x = goalInnerL;
+            vx = Math.abs(vx)*0.9;
+            wallBounces++;
+          } else if (x > goalInnerR){
+            x = goalInnerR;
+            vx = -Math.abs(vx)*0.9;
+            wallBounces++;
+          }
+        }
+
+        insideGoalMouth =
+          x - coin.r > goalL &&
+          x + coin.r < goalR;
+
+        // Gol do PC: fundo do campo.
+        if (insideGoalMouth && y - coin.r > bottomLine){
+          goalEntryX = x;
+          return {
+            goal:true,
+            ownGoal:false,
+            frames,
+            x,y,
+            startX,startY,
+            startGoalDist,
+            finalGoalDist:0,
+            minGoalDist:0,
+            collisions,
+            wallBounces,
+            goalEntryX
+          };
+        }
+
+        // Gol contra: topo.
+        if (insideGoalMouth && y + coin.r < topLine){
+          return {
+            goal:false,
+            ownGoal:true,
+            frames,
+            x,y,
+            startX,startY,
+            startGoalDist,
+            finalGoalDist:Math.hypot(goal.x-x, goal.y-y),
+            minGoalDist,
+            collisions,
+            wallBounces,
+            goalEntryX:null
+          };
+        }
+
+        // Colisão com os pregos usando SOMENTE o snapshot atual.
+        for (const n of blockers){
+          const dx = x - n.x;
+          const dy = y - n.y;
+          const minDist = coin.r + nailR;
+          const d2 = dx*dx + dy*dy;
+
+          if (d2 < minDist*minDist){
+            let d = Math.sqrt(d2);
+            let nx, ny;
+
+            if (d < 0.0001){
+              nx = 1;
+              ny = 0;
+              d = 0.0001;
+            } else {
+              nx = dx/d;
+              ny = dy/d;
+            }
+
+            const overlap = minDist - d;
+            x += nx*overlap;
+            y += ny*overlap;
+
+            const vn = vx*nx + vy*ny;
+            if (vn < 0){
+              const restitution = 0.94;
+              vx -= (1+restitution)*vn*nx;
+              vy -= (1+restitution)*vn*ny;
+              collisions++;
+            }
+          }
+        }
+      }
+
+      const friction = frictionPerFrame;
+      vx *= friction;
+      vy *= friction;
+
+      const sp = Math.hypot(vx,vy);
+      if (sp > 0){
+        const nextSpeed = Math.max(0, sp - rollingResistance);
+        if (nextSpeed === 0){
+          vx = 0;
+          vy = 0;
+        } else {
+          const scale = nextSpeed/sp;
+          vx *= scale;
+          vy *= scale;
+        }
+      }
+
+      const gd = Math.hypot(goal.x-x, goal.y-y);
+      if (gd < minGoalDist) minGoalDist = gd;
+    }
+
+    const finalGoalDist = Math.hypot(goal.x-x, goal.y-y);
+
+    return {
+      goal:false,
+      ownGoal:false,
+      frames,
+      x,y,
+      startX,startY,
+      startGoalDist,
+      finalGoalDist,
+      minGoalDist,
+      collisions,
+      wallBounces,
+      goalEntryX:null
+    };
+  }
+
+  function scoreAIPlan(result, sector, shotPower){
+    if (result.ownGoal) return -10000000;
+
+    // Um gol encontrado pela simulação vale muito mais do que qualquer
+    // simples avanço. Entre gols possíveis, prefere o que entra mais cedo
+    // e com margem razoável para as traves.
+    if (result.goal){
+      const goalCenter = W/2;
+      const centerOffset = Math.abs(result.goalEntryX-goalCenter);
+
+      let score =
+        5000000
+        - result.frames*180
+        - result.collisions*18
+        - result.wallBounces*10;
+
+      // Evita raspar demais nas traves.
+      if (centerOffset > field.goalW*.34) score -= 3000;
+
+      // Com goleiro móvel, não existe previsão de onde ele estará.
+      // Usamos apenas a posição atual como referência, nunca a futura.
+      if (goalkeeperMovementEnabled){
+        const keeper = nails.find(n => n.team === 'bottom' && n.isGoalkeeper);
+        if (keeper){
+          const currentKeeperGap = Math.abs(result.goalEntryX-keeper.x);
+          score += Math.min(650, currentKeeperGap*7);
+        }
+      }
+
+      return score;
+    }
+
+    const progress = result.startGoalDist - result.finalGoalDist;
+    const bestProgress = result.startGoalDist - result.minGoalDist;
+    const forward = result.y - result.startY;
+    const centerPenalty = Math.abs(result.x-W/2);
+
+    let score =
+      progress*8.0 +
+      bestProgress*3.2 +
+      forward*1.7 -
+      result.finalGoalDist*0.34 -
+      centerPenalty*0.18 -
+      result.wallBounces*3;
+
+    // Chegar na região da área ofensiva é valorizado.
+    if (result.y > field.y + field.h*0.82) score += 280;
+    if (result.y > field.y + field.h*0.90) score += 360;
+
+    // Evita jogadas que simplesmente voltam para praticamente o mesmo lugar.
+    const displacement = Math.hypot(
+      result.x-result.startX,
+      result.y-result.startY
+    );
+    if (displacement < 55) score -= 850;
+
+    // Memória dos petelecos anteriores da mesma rodada.
+    for (const old of aiTurnHistory){
+      const angleDist = sectorDistance(sector, old.sector);
+      const powerDist = Math.abs(shotPower-old.power);
+
+      if (old.bad && angleDist <= 1) score -= 20000;
+      else if (old.bad && angleDist === 2) score -= 2200;
+
+      if (angleDist === 0 && powerDist < 8) score -= 3200;
+    }
+
+    return score;
+  }
+
+  function planAIShot(){
+    const blockers = snapshotAIBlockers();
+
+    // Busca global: testa os 32 ângulos permitidos e várias forças.
+    // Não tenta "adivinhar" o futuro dos elementos móveis.
+    let powers;
+    if (difficulty === 'easy'){
+      powers = [42,54,66,78,90,100];
+    } else if (difficulty === 'hard'){
+      powers = [34,40,46,52,58,64,70,76,82,88,94,100];
+    } else {
+      powers = [36,44,52,60,68,76,84,92,100];
+    }
+
+    let best = null;
+
+    for (let sector=0; sector<32; sector++){
+      for (const shotPower of powers){
+        const result = simulateAICandidate(sector,shotPower,blockers);
+        let score = scoreAIPlan(result,sector,shotPower);
+
+        // No fácil existe alguma imprecisão. No normal é mínima.
+        // No difícil praticamente prevalece o cálculo.
+        if (difficulty === 'easy') score += (Math.random()-.5)*420;
+        else if (difficulty === 'normal') score += (Math.random()-.5)*55;
+        else score += (Math.random()-.5)*8;
+
+        if (!best || score > best.score){
+          best = {
+            sector,
+            power:shotPower,
+            score,
+            predictedGoal:result.goal,
+            result
+          };
         }
       }
     }
 
-    if (nearestClearance > coin.r+nailR+18) score += 10;
+    // Refinamento fino da força ao redor da melhor solução encontrada.
+    if (best){
+      const finePowers = [
+        best.power-6,
+        best.power-3,
+        best.power+3,
+        best.power+6
+      ]
+      .map(v => Math.max(28,Math.min(100,v)))
+      .filter((v,i,a) => a.indexOf(v) === i);
 
-    // Se a última tentativa falhou, não repete o mesmo ângulo.
-    if (lastBadShot){
-      const dist = sectorDistance(sector, lastBadShot.sector);
-      if (dist <= 1) score -= 1000;
-      else if (dist === 2) score -= 300;
-      else if (dist === 3) score -= 70;
-    }
+      for (const shotPower of finePowers){
+        const result = simulateAICandidate(best.sector,shotPower,blockers);
+        const score = scoreAIPlan(result,best.sector,shotPower);
 
-    // Na mesma rodada evita insistir exatamente no mesmo setor.
-    for (const shot of aiTurnHistory){
-      if (sectorDistance(sector, shot.sector) === 0) score -= 70;
-    }
-
-    score += (Math.random()-.5) * 7;
-    return score;
-  }
-
-  function chooseAISector(directTravelAngle){
-    let directHitAngle = directTravelAngle + Math.PI;
-    directHitAngle = (directHitAngle % (Math.PI*2) + Math.PI*2) % (Math.PI*2);
-    const directSector = Math.round(directHitAngle / (Math.PI/16)) % 32;
-
-    const last = aiTurnHistory.length
-      ? aiTurnHistory[aiTurnHistory.length-1]
-      : null;
-
-    const lastBadShot = last && last.bad ? last : null;
-    aiCorrectionActive = !!lastBadShot;
-
-    // Depois de uma jogada ruim, abre deliberadamente o leque de ângulos.
-    const offsets = lastBadShot
-      ? [0,-3,3,-4,4,-5,5,-6,6,-8,8,-10,10]
-      : [0,-1,1,-2,2,-3,3,-4,4,-5,5,-6,6];
-
-    let bestSector = directSector;
-    let bestScore = -Infinity;
-
-    for (const off of offsets){
-      const candidate = normalizeSector(directSector + off);
-      const score = evaluateAICandidate(candidate, directTravelAngle, lastBadShot);
-      if (score > bestScore){
-        bestScore = score;
-        bestSector = candidate;
+        if (score > best.score){
+          best = {
+            sector:best.sector,
+            power:shotPower,
+            score,
+            predictedGoal:result.goal,
+            result
+          };
+        }
       }
     }
 
-    // Segurança extra: após falha, muda pelo menos 3 das 32 posições.
-    if (lastBadShot && sectorDistance(bestSector, lastBadShot.sector) < 3){
-      const side = Math.random() < .5 ? -1 : 1;
-      bestSector = normalizeSector(lastBadShot.sector + side*(3 + Math.floor(Math.random()*4)));
-    }
-
-    return bestSector;
+    return best || {
+      sector:16,
+      power:72,
+      score:0,
+      predictedGoal:false
+    };
   }
 
   function finalizeAIShot(){
@@ -856,32 +1122,17 @@
   }
 
   function prepareAIAim(){
-    const goal = aiGoalPoint();
+    const plan = planAIShot();
 
-    const dx = goal.x - coin.x;
-    const dy = goal.y - coin.y;
-    let directTravelAngle = Math.atan2(dy, dx);
-
-    const noise = difficulty === 'easy' ? 0.30 : difficulty === 'hard' ? 0.055 : 0.13;
-    directTravelAngle += (Math.random()*2-1) * noise;
-
-    aiAimSector = chooseAISector(directTravelAngle);
-
-    let p;
-    if (difficulty === 'easy') p = 45 + Math.random()*42;
-    else if (difficulty === 'hard') p = 67 + Math.random()*25;
-    else p = 55 + Math.random()*38;
+    aiAimSector = plan.sector;
+    aiAimPower = plan.power;
 
     const last = aiTurnHistory.length
       ? aiTurnHistory[aiTurnHistory.length-1]
       : null;
 
-    // Se ficou preso, altera também a força para não reproduzir o mesmo estado físico.
-    if (last && last.bad && Math.abs(p-last.power) < 9){
-      p += p < 72 ? 12 : -12;
-    }
+    aiCorrectionActive = !!(last && last.bad);
 
-    aiAimPower = Math.max(28, Math.min(100, p));
     aiAiming = true;
     power = aiAimPower;
     updateUI();
@@ -1899,7 +2150,7 @@
       ctx.fillStyle='#ff6a64';
       ctx.strokeStyle='rgba(0,0,0,.55)';
       ctx.lineWidth=5;
-      const aiLabel = aiCorrectionActive ? 'PC CORRIGINDO ÂNGULO...' : 'PC MIRANDO...';
+      const aiLabel = aiCorrectionActive ? 'PC RECALCULANDO JOGADA...' : 'PC CALCULANDO CHUTE...';
       ctx.strokeText(aiLabel,coin.x,coin.y-62);
       ctx.fillText(aiLabel,coin.x,coin.y-62);
     }
