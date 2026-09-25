@@ -1,0 +1,11 @@
+{
+  "name": "Mundo Sensorial",
+  "short_name": "Sensorial",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#dff7ff",
+  "theme_color": "#dff7ff",
+  "icons": [
+    {"src":"tea-heart.jpg","sizes":"512x512","type":"image/jpeg","purpose":"any"}
+  ]
+}

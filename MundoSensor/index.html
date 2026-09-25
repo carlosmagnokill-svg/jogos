@@ -1,1 +1,183 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#dff7ff">
 
+<link rel="icon" href="tea-heart.jpg">
+<link rel="apple-touch-icon" href="tea-heart.jpg">
+<title>Mundo Sensorial</title>
+<style>
+:root{--bg:#dff7ff;--ink:#24354a;--card:rgba(255,255,255,.82);--gray:0}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);overscroll-behavior:none}
+body{background:var(--bg);transition:background .3s;overflow-x:hidden}
+body::after{content:"";position:fixed;inset:0;backdrop-filter:grayscale(var(--gray));pointer-events:none;z-index:80}
+.app{max-width:540px;margin:auto;min-height:100dvh;padding:env(safe-area-inset-top) 14px calc(28px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:100;padding:10px 0;background:linear-gradient(var(--bg) 72%,transparent)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:900}.brandtext{display:flex;flex-direction:column;line-height:1.12}.brandtext small{font-size:.62rem;font-weight:650;opacity:.72;margin-top:4px;white-space:nowrap}.brand img{width:42px;height:42px;border-radius:12px;object-fit:cover;box-shadow:0 4px 12px #0002}
+.tools{display:flex;gap:7px}.tool,.reset{border:0;background:#fff;border-radius:14px;padding:10px 12px;box-shadow:0 5px 14px #0002;font-weight:800}
+.card{background:var(--card);border:1px solid #fff;border-radius:28px;padding:18px;margin:12px 0;box-shadow:0 12px 28px #26364d20;backdrop-filter:blur(9px)}
+h2{font-size:.92rem;margin:0 0 14px;color:#43566b;letter-spacing:.02em}
+.press-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.press{aspect-ratio:1;border:0;border-radius:50%;box-shadow:inset 0 -8px 0 #0002,0 9px 13px #0002;transition:.12s;position:relative}
+.press::after{content:"";position:absolute;inset:12% 22% auto;height:19%;border-radius:50%;background:#fff8;filter:blur(2px)}
+.press.down{transform:translateY(8px) scale(.96);filter:grayscale(1);box-shadow:inset 0 -1px 0 #0002,0 2px 5px #0002}
+.red{background:#ff5870}.yellow{background:#ffd84d}.blue{background:#50b7e8}.green{background:#43cc9b}
+
+.dials{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.dialbox{text-align:center;font-size:.72rem;font-weight:900;user-select:none}
+.dial{height:138px;border-radius:24px;background:#edf4f6;border:6px solid #fff;box-shadow:0 8px 18px #0002,inset 0 0 12px #0001;position:relative;overflow:hidden;touch-action:none}
+.roller{position:absolute;left:20%;right:20%;top:-45%;height:190%;border-radius:24px;box-shadow:inset 8px 0 10px #fff5,inset -10px 0 12px #0002;transition:filter .15s}
+.roller::after{content:"";position:absolute;inset:0;border-radius:inherit;background:repeating-linear-gradient(0deg,transparent 0 10px,#fff7 10px 13px,#0002 13px 16px,transparent 16px 26px);background-position-y:var(--groove,0px)}
+.dial.color .roller{background:linear-gradient(90deg,#e95b6e,#ffce4c,#4dd49e,#4caeea)}
+.dial.gray .roller{background:linear-gradient(90deg,#242424,#aaa,#ececec,#555)}
+.dial.rain .roller{background:linear-gradient(90deg,#1667ae,#57b7ef,#9be3ff,#287bc2)}
+.dial::before,.dial::after{content:"";position:absolute;left:7px;right:7px;height:32px;z-index:2;pointer-events:none}
+.dial::before{top:0;background:linear-gradient(#edf4f6,transparent)}.dial::after{bottom:0;background:linear-gradient(transparent,#edf4f6)}
+.dial-label{margin:7px 0 0}.reset{display:block;margin:15px auto 0}
+
+.piano{display:flex;height:112px;margin-bottom:18px;border-radius:12px;overflow:hidden;box-shadow:0 6px 14px #0002;background:#222;padding:0 2px 3px;position:relative}
+.key{flex:1;border:1px solid #222;border-top:0;border-radius:0 0 7px 7px;position:relative;transition:.08s;transform-origin:top}
+.key:nth-child(1){background:#ff707e}.key:nth-child(2){background:#ffad5b}.key:nth-child(3){background:#ffe164}.key:nth-child(4){background:#70d79e}.key:nth-child(5){background:#62c9e9}.key:nth-child(6){background:#749cf3}.key:nth-child(7){background:#b080e9}.key:nth-child(8){background:#ef78ba}
+.key.active{transform:scaleY(.92);filter:brightness(1.22);box-shadow:inset 0 10px 18px #0003}
+.key::after{content:"";position:absolute;left:66%;top:0;width:52%;height:58%;background:#25252a;border-radius:0 0 5px 5px;z-index:2}.key:last-child::after{display:none}
+.slider-row{display:flex;align-items:center;gap:10px}.track{height:22px;flex:1;border-radius:13px;background:linear-gradient(90deg,#ff707e,#ffad5b,#ffe164,#70d79e,#62c9e9,#749cf3,#b080e9,#ef78ba);position:relative}
+.slider{width:48px;height:48px;border-radius:50%;background:#fff;box-shadow:0 5px 13px #0004;position:absolute;top:50%;left:0;transform:translate(-2px,-50%);touch-action:none}
+
+.jelly{height:160px;border-radius:48% 52% 47% 53%;background:linear-gradient(135deg,var(--j1,#65e0c3),var(--j2,#59b9ff),var(--j3,#a487f5));box-shadow:inset 0 -20px 30px #253d7730,0 10px 20px #0002;position:relative;overflow:hidden;touch-action:none;transition:background .35s,transform .14s}
+.face{position:absolute;inset:0;opacity:0;transition:.18s;pointer-events:none}.face.show{opacity:.46}
+.eye{position:absolute;top:40%;width:12%;height:8%;border-bottom:5px solid currentColor;border-radius:0 0 50% 50%}.eye.l{left:29%}.eye.r{right:29%}
+.smile{position:absolute;left:38%;top:53%;width:24%;height:22%;border-bottom:6px solid currentColor;border-radius:0 0 50% 50%}
+.ripple{position:absolute;width:16px;height:16px;border:3px solid #fff9;border-radius:50%;transform:translate(-50%,-50%);animation:rip .65s ease-out forwards}@keyframes rip{to{width:150px;height:150px;opacity:0}}
+
+
+.pull-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.pulltoy{height:155px;position:relative;display:flex;justify-content:center;overflow:hidden;border-radius:22px;background:#ffffff70;box-shadow:inset 0 0 0 1px #fff}
+.cord{position:absolute;top:12px;width:13px;height:68px;border-radius:9px;transform-origin:50% 0;background:repeating-linear-gradient(0deg,var(--c1) 0 6px,var(--c2) 6px 12px);box-shadow:inset 2px 0 3px #fff7}
+.pullhandle{position:absolute;top:73px;width:70%;height:48px;border:0;border-radius:19px;background:var(--c1);box-shadow:inset 0 -7px 0 #0002,0 7px 12px #0002;color:#fff;font-weight:900;touch-action:none;user-select:none}
+.pulltoy:nth-child(1){--c1:#ff627a;--c2:#ffb1bd}.pulltoy:nth-child(2){--c1:#4ab6e8;--c2:#a9e2fa}.pulltoy:nth-child(3){--c1:#49cb91;--c2:#a5edce}
+.pullname{position:absolute;bottom:8px;font-size:.68rem;font-weight:850;opacity:.7}
+
+#rainCanvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:70}
+.wet{position:fixed;inset:0;pointer-events:none;z-index:72;opacity:var(--wet,0);transition:opacity 1.25s ease;background:
+radial-gradient(ellipse at 12% 18%,transparent 0 4px,#bdeaff88 5px 7px,transparent 8px),
+radial-gradient(ellipse at 73% 28%,transparent 0 8px,#d8f4ff99 9px 12px,transparent 13px),
+radial-gradient(ellipse at 44% 64%,transparent 0 12px,#bdeaff77 13px 17px,transparent 18px),
+linear-gradient(105deg,transparent 0 14%,#d8f4ff33 15% 16%,transparent 17% 49%,#d8f4ff35 50% 51%,transparent 52%)}
+.wet::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(92deg,transparent 0 36px,#d8f4ff24 38px 41px,transparent 43px 78px);filter:blur(1px)}
+.reset.allreset{color:#fff;background:linear-gradient(90deg,#ff5d73,#ffb84f,#55cf96,#4fb7e8,#8e75e8);box-shadow:0 7px 16px #0002, inset 0 -4px 0 #0002;letter-spacing:.02em}.dialhint{position:absolute;right:5px;top:50%;transform:translateY(-50%);z-index:5;display:flex;height:88%;flex-direction:column;justify-content:space-between;font-size:1.25rem;font-weight:950;color:#40536a;pointer-events:none}.dialbox{position:relative}
+.panel{position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));max-width:516px;max-height:calc(100dvh - 24px);overflow:auto;margin:auto;background:#fff;border-radius:24px;padding:18px;z-index:120;box-shadow:0 20px 55px #0005;display:none}.panel.open{display:block}.panel label{display:flex;justify-content:space-between;align-items:center;margin:12px 0}.panel input[type=range]{width:48%}.small{font-size:.77rem;opacity:.7}
+.toast{position:fixed;left:50%;bottom:25px;transform:translate(-50%,15px);background:#26364de8;color:white;padding:10px 15px;border-radius:18px;z-index:130;opacity:0;transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:390px){.dial{height:124px}.card{padding:15px}.piano{height:98px}}
+</style>
+</head>
+<body>
+<canvas id="rainCanvas"></canvas><div class="wet" id="wet"></div>
+<main class="app">
+<header><div class="top"><div class="brand"><img src="tea-heart.jpg" alt="Coração TEA"><div class="brandtext"><span>Mundo Sensorial</span><small>Desenvolvido por Carlos Magno Kill</small></div></div><div class="tools"><button class="tool" id="sound">🔊</button><button class="tool" id="teacher">⚙️</button></div></div></header>
+
+<section class="card"><h2>APERTE OS BOTÕES</h2><div class="press-grid">
+<button class="press red" data-note="261.63"></button><button class="press yellow" data-note="329.63"></button><button class="press blue" data-note="392"></button><button class="press green" data-note="523.25"></button>
+</div></section>
+
+<section class="card"><h2>DESLIZE OS DIALS PARA CIMA OU PARA BAIXO</h2><div class="dials">
+<div class="dialbox"><div class="dialhint"><b>+</b><b>−</b></div><div class="dial color" data-dial="color"><div class="roller"></div></div><p class="dial-label">COR</p></div>
+<div class="dialbox"><div class="dialhint"><b>+</b><b>−</b></div><div class="dial gray" data-dial="gray"><div class="roller"></div></div><p class="dial-label">CORES</p></div>
+<div class="dialbox"><div class="dialhint"><b>+</b><b>−</b></div><div class="dial rain" data-dial="rain"><div class="roller"></div></div><p class="dial-label">CHUVA</p></div>
+</div><button class="reset allreset" id="reset">↻ VOLTAR TUDO</button></section>
+
+<section class="card"><h2>PIANO SENSORIAL</h2><div class="piano" id="piano">
+<div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div><div class="key"></div>
+</div><div class="slider-row"><span>♪</span><div class="track" id="track"><div class="slider" id="slider"></div></div><span>♫</span></div></section>
+
+
+<section class="card"><h2>PUXE E SOLTE</h2><div class="pull-grid">
+<div class="pulltoy"><div class="cord"></div><button class="pullhandle" data-pull="0">PUXE</button><span class="pullname">POP</span></div>
+<div class="pulltoy"><div class="cord"></div><button class="pullhandle" data-pull="1">PUXE</button><span class="pullname">PLIM</span></div>
+<div class="pulltoy"><div class="cord"></div><button class="pullhandle" data-pull="2">PUXE</button><span class="pullname">BOING</span></div>
+</div></section>
+
+<section class="card"><h2>TOQUE NA BOLHA</h2><div class="jelly" id="jelly"><div class="face" id="face"><i class="eye l"></i><i class="eye r"></i><i class="smile"></i></div></div></section>
+</main>
+
+<div class="panel" id="panel"><strong>👩‍🏫 Painel da professora</strong>
+<label>Volume do app <input id="volume" type="range" min="0" max="1" value=".85" step=".01"></label>
+<label>Intensidade da chuva <input id="rainMax" type="range" min=".3" max="1" value="1" step=".05"></label>
+<label>Chuva habilitada <input id="rainEnabled" type="checkbox" checked></label>
+<div class="small">O volume inicial foi aumentado. A professora também pode usar os botões físicos de volume do celular.</div>
+<button class="reset" id="close" type="button" style="background:#24354a;color:white;width:100%;margin-top:16px">FECHAR CONFIGURAÇÕES</button></div><div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+let ctx,master,soundOn=true,vol=.85;
+function ac(){if(!ctx){ctx=new (window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();master.gain.value=vol;master.connect(ctx.destination)}if(ctx.state==='suspended')ctx.resume()}
+function tone(f=440,d=.14,type='sine',g=.22){if(!soundOn)return;ac();let o=ctx.createOscillator(),v=ctx.createGain();o.type=type;o.frequency.value=f;v.gain.setValueAtTime(g,ctx.currentTime);v.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+d);o.connect(v);v.connect(master);o.start();o.stop(ctx.currentTime+d)}
+function tick(){tone(500+Math.random()*80,.035,'square',.07)}
+function chord(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,.25,'sine',.18),i*85))}
+function toast(t){let e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),950)}
+
+let down=new Set();$$('.press').forEach(b=>b.onpointerdown=()=>{if(down.has(b))return;b.classList.add('down');down.add(b);tone(+b.dataset.note,.22,'sine',.32);if(down.size===4)setTimeout(()=>{chord();[...down].forEach((x,i)=>setTimeout(()=>{x.classList.remove('down');tone(360+i*65,.09,'triangle',.13)},i*105));down.clear()},330)});
+
+let hue=195,grayPhase=0,rain=.0,rainMax=1;
+function bg(){document.documentElement.style.setProperty('--bg',`hsl(${hue} 82% 91%)`)}
+function grayscale(){let g=1-Math.abs(((grayPhase%2)+2)%2-1);document.documentElement.style.setProperty('--gray',g.toFixed(2))}
+function dial(el){let active=false,lastY=0,pos=0,acc=0;let roller=el.querySelector('.roller');
+ el.onpointerdown=e=>{active=true;lastY=e.clientY;el.setPointerCapture(e.pointerId);tick()};
+ el.onpointermove=e=>{if(!active)return;let dy=lastY-e.clientY;lastY=e.clientY;pos+=dy;roller.style.setProperty('--groove',`${pos}px`);acc+=Math.abs(dy);if(acc>12){tick();acc=0}
+ if(el.dataset.dial==='color'){hue=(hue+dy*.65+360)%360;bg()}
+ if(el.dataset.dial==='gray'){grayPhase+=dy/170;grayscale()}
+ if(el.dataset.dial==='rain'){if(dy>0 && rain===0) rain=.12; rain=Math.max(0,Math.min(rainMax,rain+dy/210));updateRain()}
+ };el.onpointerup=el.onpointercancel=()=>active=false}
+$$('.dial').forEach(dial);
+
+const canvas=$('#rainCanvas'),cx=canvas.getContext('2d');let drops=[],rainNoise=null;
+function resize(){canvas.width=innerWidth*devicePixelRatio;canvas.height=innerHeight*devicePixelRatio;cx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0)}addEventListener('resize',resize);resize();
+function rainAudio(){if(!soundOn||rain<=.02||!$('#rainEnabled').checked){if(rainNoise){rainNoise.stop();rainNoise=null}return}ac();if(rainNoise)return;
+ let n=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate),a=n.getChannelData(0);for(let i=0;i<a.length;i++)a[i]=(Math.random()*2-1);
+ let s=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=ctx.createGain();s.buffer=n;s.loop=true;f.type='lowpass';f.frequency.value=2500;g.gain.value=.12;s.connect(f);f.connect(g);g.connect(master);s.start();s._gain=g;rainNoise=s}
+function updateRain(){document.documentElement.style.setProperty('--wet',rain<=0?0:Math.min(.9,.16+rain*.92));rainAudio();if(rainNoise)rainNoise._gain.gain.setTargetAtTime(.08+rain*.28,ctx.currentTime,.08)}
+function frame(){cx.clearRect(0,0,innerWidth,innerHeight);if(rain>0 && $('#rainEnabled').checked){let count=Math.max(1,Math.ceil(rain*10));for(let i=0;i<count;i++)if(Math.random()<(.45+rain*.5))drops.push({x:Math.random()*innerWidth,y:-30,l:32+Math.random()*72,v:9+rain*18+Math.random()*8,w:2.5+rain*3});
+ for(let d of drops){d.y+=d.v;cx.beginPath();cx.moveTo(d.x,d.y);cx.lineTo(d.x-2,d.y+d.l);cx.lineWidth=d.w;cx.lineCap='round';cx.strokeStyle=`rgba(105,194,240,${.35+rain*.45})`;cx.stroke()}
+ drops=drops.filter(d=>d.y<innerHeight+80)}requestAnimationFrame(frame)}frame();
+
+$('#reset').onclick=()=>{hue=195;grayPhase=0;rain=0;grayscale();document.documentElement.style.setProperty('--bg','#dff7ff');$$('.roller').forEach(r=>r.style.setProperty('--groove','0px'));updateRain();$$('.press').forEach(x=>x.classList.remove('down'));down.clear();slider.style.left='0';keys.forEach(k=>k.classList.remove('active'));chord();setTimeout(()=>tone(392,.18,'triangle',.24),320);toast('Tudo voltou ao início')};
+
+const keys=$$('.key'),notes=[261.63,293.66,329.63,349.23,392,440,493.88,523.25],track=$('#track'),slider=$('#slider');let sliding=false,last=-1;
+function playStep(i){if(i===last)return;keys.forEach(k=>k.classList.remove('active'));keys[i].classList.add('active');setTimeout(()=>keys[i].classList.remove('active'),140);tone(notes[i],.18,'triangle',.22);last=i}
+function moveSlider(e){let r=track.getBoundingClientRect(),p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),i=Math.min(7,Math.floor(p*8));slider.style.left=`calc(${p*100}% - ${p*44}px)`;playStep(i)}
+slider.onpointerdown=e=>{sliding=true;slider.setPointerCapture(e.pointerId);moveSlider(e)};slider.onpointermove=e=>{if(sliding)moveSlider(e)};slider.onpointerup=()=>{sliding=false;last=-1};
+keys.forEach((k,i)=>k.onpointerdown=()=>{last=-1;playStep(i)});
+
+
+const pullFreq=[190,520,300], pullType=['square','sine','triangle'];
+$$('.pulltoy').forEach((toy,i)=>{
+ const h=toy.querySelector('.pullhandle'), c=toy.querySelector('.cord'); let active=false,start=0,pull=0;
+ h.onpointerdown=e=>{active=true;start=e.clientY;h.setPointerCapture(e.pointerId);tone(pullFreq[i],.07,pullType[i],.18)};
+ h.onpointermove=e=>{if(!active)return;pull=Math.max(0,Math.min(48,e.clientY-start));h.style.transform=`translateY(${pull}px)`;c.style.transform=`scaleY(${1+pull/34})`;if(Math.round(pull)%14===0)tone(pullFreq[i]+pull*2,.035,pullType[i],.045)};
+ const release=()=>{if(!active)return;active=false;h.style.transition=c.style.transition='transform .42s cubic-bezier(.2,1.7,.35,1)';h.style.transform='';c.style.transform='';tone(pullFreq[i]+pull*3,.28,pullType[i],.25);setTimeout(()=>h.style.transition=c.style.transition='',450)};
+ h.onpointerup=release;h.onpointercancel=release;
+});
+
+let jellyTap=0;const palettes=[['#65e0c3','#59b9ff','#a487f5'],['#ff9fba','#ffc85b','#ffec7a'],['#75df9d','#56c9dc','#7fa8ff'],['#c38cf5','#ff8fc7','#70d9e9'],['#ff9b70','#ffd76b','#7ddbb2']];
+$('#jelly').onpointerdown=e=>{jellyTap++;let j=e.currentTarget,p=palettes[jellyTap%palettes.length];j.style.setProperty('--j1',p[0]);j.style.setProperty('--j2',p[1]);j.style.setProperty('--j3',p[2]);j.style.transform='scale(.965)';$('#face').classList.add('show');
+ let r=j.getBoundingClientRect(),q=document.createElement('i');q.className='ripple';q.style.left=(e.clientX-r.left)+'px';q.style.top=(e.clientY-r.top)+'px';j.append(q);tone(360+(jellyTap%5)*55,.28,'sine',.18);
+ setTimeout(()=>j.style.transform='',130);setTimeout(()=>{$('#face').classList.remove('show');q.remove()},650)};
+
+$('#sound').onclick=e=>{soundOn=!soundOn;e.currentTarget.textContent=soundOn?'🔊':'🔇';if(!soundOn&&rainNoise){rainNoise.stop();rainNoise=null}else updateRain()};
+$('#teacher').onclick=()=>$('#panel').classList.add('open');
+function closePanel(e){if(e){e.preventDefault();e.stopPropagation()}$('#panel').classList.remove('open')}
+$('#close').addEventListener('click',closePanel);
+$('#close').addEventListener('pointerup',closePanel);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closePanel(e)});
+$('#volume').oninput=e=>{vol=+e.target.value;if(master)master.gain.value=vol};
+$('#rainMax').oninput=e=>{rainMax=+e.target.value;rain=Math.min(rain,rainMax);updateRain()};
+$('#rainEnabled').onchange=e=>{if(!e.target.checked){drops=[];rain=0}updateRain()};
+
+if(location.protocol==='http:' || location.protocol==='https:'){
+ const m=document.createElement('link');m.rel='manifest';m.href='manifest.webmanifest';document.head.appendChild(m);
+}
+</script>
+</body></html>
