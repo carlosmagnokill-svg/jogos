@@ -18,7 +18,10 @@ body::after{content:"";position:fixed;inset:0;backdrop-filter:grayscale(var(--gr
 header{position:sticky;top:0;z-index:100;padding:10px 0;background:linear-gradient(var(--bg) 72%,transparent)}
 .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .brand{display:flex;align-items:center;gap:9px;font-weight:900}.brandtext{display:flex;flex-direction:column;line-height:1.12}.brandtext small{font-size:.62rem;font-weight:650;opacity:.72;margin-top:4px;white-space:nowrap}.brand img{width:42px;height:42px;border-radius:12px;object-fit:cover;box-shadow:0 4px 12px #0002}
-.tools{display:flex;gap:7px}.tool,.reset{border:0;background:#fff;border-radius:14px;padding:10px 12px;box-shadow:0 5px 14px #0002;font-weight:800}
+.tools{display:flex;gap:7px}
+.installbtn{border:0;border-radius:14px;padding:10px 14px;background:linear-gradient(135deg,#4ecf98,#4eb6e8);color:#fff;font-weight:900;box-shadow:0 6px 15px #0002;white-space:nowrap}.installbtn:disabled{background:#c8d2da;color:#667684;box-shadow:none;opacity:.9;cursor:default}
+.ioshelp{position:fixed;inset:0;background:#16223899;backdrop-filter:blur(5px);z-index:160;display:none;align-items:flex-end;justify-content:center;padding:14px}.ioshelp.open{display:flex}.iosbox{width:min(500px,100%);background:#fff;border-radius:26px;padding:22px;color:#24354a;box-shadow:0 20px 60px #0005}.iosbox h3{margin:0 0 12px}.iossteps{line-height:1.55;margin:12px 0 18px;padding-left:22px}.iosclose{width:100%;border:0;border-radius:15px;padding:12px;background:#24354a;color:#fff;font-weight:900}
+@media(max-width:430px){.brandtext small{font-size:.55rem}.installbtn{font-size:.72rem;padding:9px 10px}}.tool,.reset{border:0;background:#fff;border-radius:14px;padding:10px 12px;box-shadow:0 5px 14px #0002;font-weight:800}
 .card{background:var(--card);border:1px solid #fff;border-radius:28px;padding:18px;margin:12px 0;box-shadow:0 12px 28px #26364d20;backdrop-filter:blur(9px)}
 h2{font-size:.92rem;margin:0 0 14px;color:#43566b;letter-spacing:.02em}
 .press-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
@@ -77,7 +80,7 @@ linear-gradient(105deg,transparent 0 14%,#d8f4ff33 15% 16%,transparent 17% 49%,#
 <body>
 <canvas id="rainCanvas"></canvas><div class="wet" id="wet"></div>
 <main class="app">
-<header><div class="top"><div class="brand"><img src="tea-heart.jpg" alt="Coração TEA"><div class="brandtext"><span>Mundo Sensorial</span><small>Desenvolvido por Carlos Magno Kill</small></div></div><div class="tools"><button class="tool" id="sound">🔊</button><button class="tool" id="teacher">⚙️</button></div></div></header>
+<header><div class="top"><div class="brand"><img src="tea-heart.jpg" alt="Coração TEA"><div class="brandtext"><span>Mundo Sensorial</span><small>Desenvolvido por Carlos Magno Kill</small></div></div><button class="installbtn" id="installApp" type="button">📲 Salvar App</button><div class="tools"><button class="tool" id="sound">🔊</button><button class="tool" id="teacher">⚙️</button></div></div></header>
 
 <section class="card"><h2>APERTE OS BOTÕES</h2><div class="press-grid">
 <button class="press red" data-note="261.63"></button><button class="press yellow" data-note="329.63"></button><button class="press blue" data-note="392"></button><button class="press green" data-note="523.25"></button>
@@ -103,6 +106,10 @@ linear-gradient(105deg,transparent 0 14%,#d8f4ff33 15% 16%,transparent 17% 49%,#
 <section class="card"><h2>TOQUE NA BOLHA</h2><div class="jelly" id="jelly"><div class="face" id="face"><i class="eye l"></i><i class="eye r"></i><i class="smile"></i></div></div></section>
 </main>
 
+<div class="ioshelp" id="iosHelp"><div class="iosbox"><h3>📲 Salvar no iPhone / iPad</h3>
+<p>Para colocar o Mundo Sensorial na Tela de Início:</p>
+<ol class="iossteps"><li>Toque no botão <strong>Compartilhar</strong> do navegador.</li><li>Escolha <strong>Adicionar à Tela de Início</strong>.</li><li>Confirme em <strong>Adicionar</strong>.</li></ol>
+<button class="iosclose" id="iosClose" type="button">ENTENDI</button></div></div>
 <div class="panel" id="panel"><strong>👩‍🏫 Painel da professora</strong>
 <label>Volume do app <input id="volume" type="range" min="0" max="1" value=".85" step=".01"></label>
 <label>Intensidade da chuva <input id="rainMax" type="range" min=".3" max="1" value="1" step=".05"></label>
@@ -176,8 +183,48 @@ $('#volume').oninput=e=>{vol=+e.target.value;if(master)master.gain.value=vol};
 $('#rainMax').oninput=e=>{rainMax=+e.target.value;rain=Math.min(rain,rainMax);updateRain()};
 $('#rainEnabled').onchange=e=>{if(!e.target.checked){drops=[];rain=0}updateRain()};
 
+
+// Instalação PWA: Android/Chromium usa prompt nativo; iOS mostra instruções.
+const installBtn=$('#installApp'), iosHelp=$('#iosHelp'), iosClose=$('#iosClose');
+let deferredInstall=null;
+const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+const standalone=window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true;
+
+function setInstalledState(installed){
+ installBtn.hidden=false;
+ installBtn.disabled=installed;
+ installBtn.textContent=installed ? '✓ App instalado' : '📲 Salvar App';
+ installBtn.setAttribute('aria-disabled', installed ? 'true' : 'false');
+}
+setInstalledState(standalone);
+
+window.addEventListener('beforeinstallprompt',e=>{
+ e.preventDefault();
+ deferredInstall=e;
+ setInstalledState(false);
+});
+window.addEventListener('appinstalled',()=>{
+ deferredInstall=null;
+ setInstalledState(true);
+});
+installBtn.addEventListener('click',async()=>{
+ if(installBtn.disabled)return;
+ if(isIOS){iosHelp.classList.add('open');return}
+ if(deferredInstall){
+   deferredInstall.prompt();
+   const choice=await deferredInstall.userChoice;
+   deferredInstall=null;
+   if(choice.outcome==='accepted')setInstalledState(true);
+ } else {
+   toast(location.protocol==='https:' ? 'Use o menu do navegador para instalar' : 'Publique no GitHub Pages para instalar');
+ }
+});
+iosClose.addEventListener('click',()=>iosHelp.classList.remove('open'));
+iosHelp.addEventListener('click',e=>{if(e.target===iosHelp)iosHelp.classList.remove('open')});
+
 if(location.protocol==='http:' || location.protocol==='https:'){
  const m=document.createElement('link');m.rel='manifest';m.href='manifest.webmanifest';document.head.appendChild(m);
+ if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}
 }
 </script>
 </body></html>

@@ -6,6 +6,14 @@
   "background_color": "#dff7ff",
   "theme_color": "#dff7ff",
   "icons": [
-    {"src":"tea-heart.jpg","sizes":"512x512","type":"image/jpeg","purpose":"any"}
-  ]
+    {
+      "src": "tea-heart.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "id": "./",
+  "scope": "./",
+  "description": "Brinquedo sensorial digital para atividades educacionais mediadas."
 }
